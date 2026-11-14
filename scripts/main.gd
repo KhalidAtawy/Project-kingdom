@@ -16,6 +16,7 @@ var hud: CanvasLayer
 var army_label: Label
 var distance_label: Label
 var message_label: Label
+var gates: Array[Area3D] = []
 
 func _ready() -> void:
 	_build_world()
@@ -99,13 +100,31 @@ func _create_gate(pos: Vector3, caption: String, value: int, tint: Color) -> voi
 	shape.size = Vector3(2.5, 3.0, 1.0)
 	collision.shape = shape
 	gate.add_child(collision)
-	gate.body_entered.connect(func(body_node: Node3D): _apply_gate(gate))
+	# Gate activation is checked manually against the runner position.
+	# This avoids relying on a physics body that the greybox runner does not have yet.
 	add_child(gate)
+	gates.append(gate)
+
+func _check_gates() -> void:
+	for gate in gates:
+		if not is_instance_valid(gate) or gate.get_meta("used", false):
+			continue
+		var z_distance := absf(runner.global_position.z - gate.global_position.z)
+		var x_distance := absf(runner.global_position.x - gate.global_position.x)
+		if z_distance <= 0.8 and x_distance <= 1.65:
+			_apply_gate(gate)
 
 func _apply_gate(gate: Area3D) -> void:
 	if run_finished or gate.get_meta("used", false):
 		return
 	gate.set_meta("used", true)
+	var gate_body := gate.get_child(0) as MeshInstance3D
+	if gate_body:
+		var faded := StandardMaterial3D.new()
+		faded.albedo_color = Color("#777777")
+		faded.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		faded.albedo_color.a = 0.35
+		gate_body.material_override = faded
 	var value: int = int(gate.get_meta("value"))
 	if gate.get_meta("is_multiplier"):
 		army_count = mini(army_count * value, MAX_ARMY)
@@ -139,6 +158,7 @@ func _process(delta: float) -> void:
 		return
 	distance += RUN_SPEED * delta
 	runner.position.z -= RUN_SPEED * delta
+	_check_gates()
 	distance_label.text = "DISTANCE: %d m" % int(distance)
 	if distance >= 75.0:
 		run_finished = true
