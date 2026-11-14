@@ -230,7 +230,7 @@ func _input(event: InputEvent) -> void:
 		elif run_finished:
 			get_tree().reload_current_scene()
 		else:
-			var dx := event.position.x - touch_start.x
+			var dx: float = event.position.x - touch_start.x
 			if absf(dx) > 35.0:
 				_change_lane(1 if dx > 0 else -1)
 	elif event is InputEventMouseButton and event.pressed:
