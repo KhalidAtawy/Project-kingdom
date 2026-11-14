@@ -17,11 +17,13 @@ var army_label: Label
 var distance_label: Label
 var message_label: Label
 var gates: Array[Area3D] = []
+var encounters: Array[Dictionary] = []
 
 func _ready() -> void:
 	_build_world()
 	_build_player()
 	_build_gates()
+	_build_encounters()
 	_build_hud()
 	_update_army()
 
@@ -132,6 +134,61 @@ func _apply_gate(gate: Area3D) -> void:
 		army_count = mini(army_count + value, MAX_ARMY)
 	_update_army()
 
+
+func _build_encounters() -> void:
+	_create_encounter(Vector3(0, 0, -54), "ENEMY RAIDERS", 4, false)
+	_create_encounter(Vector3(0, 0, -66), "BOSS: WARLORD", 6, true)
+
+func _create_encounter(pos: Vector3, title: String, strength: int, is_boss: bool) -> void:
+	var group := Node3D.new()
+	group.position = pos
+	group.set_meta("title", title)
+	group.set_meta("strength", strength)
+	group.set_meta("is_boss", is_boss)
+	group.set_meta("resolved", false)
+	var tint := Color("#a52f36") if not is_boss else Color("#4b2638")
+	var count := 3 if not is_boss else 1
+	for i in range(count):
+		var enemy := _box(Vector3(0.85, 1.6, 0.7) if not is_boss else Vector3(2.0, 2.8, 1.5), tint)
+		enemy.position = Vector3((i - 1) * 1.5, 0.8 if not is_boss else 1.4, -float(i % 2) * 0.4)
+		group.add_child(enemy)
+	var marker := Label3D.new()
+	marker.text = "%s  |  POWER %d" % [title, strength]
+	marker.font_size = 36
+	marker.position.y = 3.2
+	marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	group.add_child(marker)
+	add_child(group)
+	encounters.append({"node": group, "strength": strength, "resolved": false, "boss": is_boss, "title": title})
+
+func _check_encounters() -> void:
+	for encounter in encounters:
+		if encounter["resolved"]:
+			continue
+		var enemy_node: Node3D = encounter["node"]
+		if absf(runner.global_position.z - enemy_node.global_position.z) <= 1.4:
+			encounter["resolved"] = true
+			var strength: int = encounter["strength"]
+			var title: String = encounter["title"]
+			if army_count > strength:
+				army_count -= strength
+				message_label.text = "%s DEFEATED! LOST %d SOLDIERS" % [title, strength]
+				_update_army()
+				enemy_node.visible = false
+			elif army_count == strength:
+				army_count = 0
+				_update_army()
+				_finish_run(false, "%s: DRAW — ARMY DESTROYED" % title)
+			else:
+				army_count = 0
+				_update_army()
+				_finish_run(false, "DEFEATED BY %s" % title)
+			return
+
+func _finish_run(won: bool, result_text: String) -> void:
+	run_finished = true
+	message_label.text = "%s  |  TAP TO RESTART" % result_text
+
 func _build_hud() -> void:
 	hud = CanvasLayer.new()
 	add_child(hud)
@@ -159,10 +216,12 @@ func _process(delta: float) -> void:
 	distance += RUN_SPEED * delta
 	runner.position.z -= RUN_SPEED * delta
 	_check_gates()
+	_check_encounters()
+	if run_finished:
+		return
 	distance_label.text = "DISTANCE: %d m" % int(distance)
 	if distance >= 75.0:
-		run_finished = true
-		message_label.text = "RUN COMPLETE!  TAP TO RESTART"
+		_finish_run(true, "VICTORY! KINGDOM SECURED")
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
