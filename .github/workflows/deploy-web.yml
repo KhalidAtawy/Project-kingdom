@@ -14,6 +14,9 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+env:
+  GODOT_VERSION: 4.3
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,7 +25,19 @@ jobs:
     steps:
       - name: Check out project
         uses: actions/checkout@v4
-      - name: Import project
+      - name: Prepare Godot export templates
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates
+          if [ -d "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" ]; then
+            cp -a "/root/.local/share/godot/export_templates/${GODOT_VERSION}.stable" ~/.local/share/godot/export_templates/
+          elif [ -d "/root/.local/share/godot/templates/${GODOT_VERSION}.stable" ]; then
+            cp -a "/root/.local/share/godot/templates/${GODOT_VERSION}.stable" ~/.local/share/godot/export_templates/
+          else
+            echo "Godot ${GODOT_VERSION} export templates were not found in the CI image."
+            find /root/.local/share/godot -maxdepth 3 -type d || true
+            exit 1
+          fi
+      - name: Import project and validate scripts
         run: godot --headless --editor --path . --quit
       - name: Export Web build
         run: |
